@@ -4,13 +4,14 @@ module IO where
 -- We once again hide functions we're going to reimplement.
 -- However, some of the exercises may require you to add
 -- additional imports.
-import Prelude hiding (readLn)
-import Control.Monad (liftM)
-import Data.Char
-import Data.IP
-import Network       (HostName, PortID)
-import Network.DNS
-import System.IO
+import           Control.Monad (liftM)
+import           Data.Char
+import           Data.IP
+import           Network       (HostName, PortID)
+import           Network.DNS
+import           Prelude       hiding (readLn)
+import           System.IO
+import           Text.Read     (readMaybe)
 
 -- Task IO-1.
 --
@@ -48,7 +49,7 @@ unsafeReadInt = read
 -- Nothing
 --
 readInt :: String -> Maybe Int
-readInt = error "TODO: implement readInt"
+readInt = readMaybe
 
 -- Task IO-3.
 --
@@ -59,7 +60,7 @@ readInt = error "TODO: implement readInt"
 -- Hint: Use 'liftM'.
 
 readLnMaybe :: Read a => IO (Maybe a)
-readLnMaybe = error "TODO: implement readLnMaybe"
+readLnMaybe = liftM readMaybe getLine
 
 -- Task IO-4.
 --
@@ -83,7 +84,13 @@ readLnMaybe = error "TODO: implement readLnMaybe"
 -- remember that strings are lists of characters.
 
 sumTwo :: IO ()
-sumTwo = error "TODO: define sumTwo"
+sumTwo = do
+  putStrLn "Please enter first number:"
+  x <- readLn
+  putStrLn "Please enter second number:"
+  y <- readLn
+  putStrLn ("The sum of both numbers is " ++ show ((x + y) :: Int) ++ ".")
+
 
 -- Task IO-5.
 --
@@ -92,7 +99,11 @@ sumTwo = error "TODO: define sumTwo"
 -- the results in a list of n elements.
 
 replicateM :: Int -> IO a -> IO [a]
-replicateM = error "TODO: define replicateM"
+replicateM n ioa = go n []
+  where
+    go 0 acc  = sequence acc
+    go n' acc = go (n' - 1) (ioa:acc)
+
 
 -- Task IO-6.
 --
@@ -116,7 +127,17 @@ replicateM = error "TODO: define replicateM"
 -- Hint: Try to use suitable IO functions.
 
 sumMany :: IO ()
-sumMany = error "TODO: define sumMany"
+sumMany = do
+  putStrLn "How many numbers do you want to add?"
+  n <- readLn
+  numbers <- replicateM n askNumber
+  putStrLn ("The sum of all numbers is " ++ show (sum numbers) ++ ".")
+  where
+    askNumber :: IO Int
+    askNumber = do
+      putStrLn "Enter next number:"
+      readLn
+
 
 -- Task IO-7.
 --
@@ -137,7 +158,16 @@ sumMany = error "TODO: define sumMany"
 -- you can still find higher-order functions that work?
 
 sumMany' :: IO ()
-sumMany' = error "TODO: define sumMany'"
+sumMany' = do
+  putStrLn "How many numbers do you want to add?"
+  n <- readLn
+  numbers <- sequence $ map (uncurry askNumber) $ zip [1..n] [n, n..]
+  putStrLn ("The sum of all numbers is " ++ show (sum numbers) ++ ".")
+  where
+    askNumber :: Int -> Int -> IO Int
+    askNumber n m = do
+      putStrLn ("Enter number " ++ show n ++ " of " ++  show m ++ ":")
+      readLn
 
 -- Task IO-8.
 --
