@@ -1,17 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {-# OPTIONS_GHC -Wall -Wno-unused-imports #-}
+
 module IO where
 
 -- We once again hide functions we're going to reimplement.
 -- However, some of the exercises may require you to add
 -- additional imports.
-import           Control.Monad (liftM)
+import           Control.Exception (bracket)
+import           Control.Monad     (liftM)
 import           Data.Char
 import           Data.IP
-import           Network       (HostName, PortID)
+import           Network           (HostName, PortID (..), connectTo)
 import           Network.DNS
-import           Prelude       hiding (readLn)
+import           Prelude           hiding (readLn)
 import           System.IO
-import           Text.Read     (readMaybe)
+import           System.Random
+import           Text.Read         (readMaybe)
 
 -- Task IO-1.
 --
@@ -187,7 +192,22 @@ type Lines = Int
 type Chars = Int
 
 wc :: FilePath -> IO (Words, Lines, Chars)
-wc = error "TODO: define wc"
+wc file = withFile file ReadMode wcWithHandle
+
+wcWithHandle :: Handle -> IO (Words, Lines, Chars)
+wcWithHandle h = do
+  eof <- hIsEOF h
+  if eof
+  then
+    return (0, 0, 0)
+  else
+    do
+      line <- hGetLine h
+      (restWords, restLines, restChars) <- wcWithHandle h
+      let
+        (curWords, curLines, curChars) = (length $ words line, 1, length line)
+
+      return (curWords + restWords, curLines + restLines, curChars + restChars)
 
 -- Task IO-9.
 --
@@ -206,7 +226,12 @@ wc = error "TODO: define wc"
 -- an instance of the 'Random' class.
 
 twoDice :: IO (Int, Int)
-twoDice = error "TODO: define twoDice"
+twoDice = do
+  r1 <- throw
+  r2 <- throw
+  return (r1, r2)
+  where
+    throw = randomRIO (1, 6)
 
 -- Task IO-10.
 --
@@ -238,7 +263,16 @@ type Quantity = Int
 type Die      = Int
 
 dice :: Dice -> IO Int
-dice = error "TODO: implement dice"
+dice (D q die) = throw q die
+  where
+    throw q' die' = do
+      rs <- sequence $ take q' $ repeat (randomRIO (1, die'))
+      return (sum rs)
+dice (Const x) = return x
+dice (Plus d1 d2) = do
+    r1 <- dice d1
+    r2 <- dice d2
+    return (r1 + r2)
 
 -- Task IO-10.
 --
@@ -251,7 +285,14 @@ dice = error "TODO: implement dice"
 --   diceRange (2 `D` 8 `Plus` Const 4) == (6, 20)
 
 diceRange :: Dice -> (Int, Int)
-diceRange = error "TODO: implement diceRange"
+diceRange (D q die) = (q, q * die)
+diceRange (Const x) = (x, x)
+diceRange (Plus d1 d2) =
+  let
+    (x, y) = diceRange d1
+    (x', y') = diceRange d2
+  in
+    (x + x', y + y')
 
 -- Task IO-11.
 --
@@ -290,8 +331,17 @@ data Card = Card CardNumber Suit
 allCards :: [Card]
 allCards = [ Card cn s | cn <- [minBound ..], s <- [minBound ..] ]
 
+extract :: Int -> [a] -> (a, [a])
+extract i xs = (xs !! i, [x | (i', x) <- (zip [0..] xs), i' /= i])
+
 shuffle :: [a] -> IO [a]
-shuffle = error "TODO: define shuffle"
+shuffle = go []
+  where
+    go acc [] = return acc
+    go acc xs = do
+      rand <- randomRIO (0, (length xs) - 1)
+      let (pick, rest) = extract rand xs
+      go (pick : acc) rest
 
 -- Task IO-12.
 --
@@ -319,7 +369,14 @@ shuffle = error "TODO: define shuffle"
 -- read the response.
 
 httpTest :: IO [String]
-httpTest = error "TODO: implement httpTest"
+httpTest = do
+  h <- connectTo "example.com" (PortNumber 80)
+  hPutStrLn h "GET /index.html HTTP/1.1"
+  hPutStrLn h "Host: example.com"
+  hPutStrLn h ""
+  r <- hGetLines h
+  hClose h
+  return r
 
 hGetLines :: Handle -> IO [String]
 hGetLines h = do
@@ -344,10 +401,18 @@ hGetLines h = do
 -- Then rewrite 'httpTest' to use 'withConnection'.
 
 withConnection :: HostName -> PortID -> (Handle -> IO r) -> IO r
-withConnection = error "TODO: implement withConnection"
+withConnection h p = bracket
+  (connectTo h p)
+  (hClose)
 
 httpTest' :: IO [String]
-httpTest' = error "TODO: implement httpTest'"
+httpTest' = withConnection "example.com" (PortNumber 80) hGetLines'
+  where
+    hGetLines' h = do
+      hPutStrLn h "GET /index.html HTTP/1.1"
+      hPutStrLn h "Host: example.com"
+      hPutStrLn h ""
+      hGetLines h
 
 -- Task IO-14.
 --
@@ -369,4 +434,6 @@ googleNameServer :: FileOrNumericHost
 googleNameServer = RCHostName "8.8.8.8"
 
 dnsTest :: IO (Either DNSError [IPv4])
-dnsTest = error "TODO: define dnsTest"
+dnsTest = do
+  resolvSeed <- makeResolvSeed defaultResolvConf
+  withResolver resolvSeed (\resolver -> lookupA resolver "seed.bitcoin.sipa.be")
